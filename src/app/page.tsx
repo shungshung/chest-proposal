@@ -75,6 +75,15 @@ function MarkdownView({ text, compact = false }: { text: string; compact?: boole
   return <div className="space-y-0.5">{elements}</div>;
 }
 
+// ─── 체크리스트 카테고리 → 섹션 매핑 ─────────────────────────────────────────
+const CATEGORY_TO_SECTIONS: Record<number, SectionKey[]> = {
+  0: ['necessity'],           // 사업 필요성
+  1: ['objectives'],          // 목적 및 목표
+  2: ['content'],             // 사업 내용
+  3: ['budget'],              // 예산
+  4: ['evaluation', 'effects'], // 평가 및 기대 효과
+};
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tab = 'info' | 'upload' | SectionKey | 'preview' | 'checklist';
 
@@ -645,14 +654,28 @@ function Preview({ formData, sections }: { formData: ProposalFormData; sections:
 }
 
 // ─── Checklist ────────────────────────────────────────────────────────────────
-function Checklist({ checklist, setChecklist, isAnalyzing }: {
+function Checklist({ checklist, setChecklist, isAnalyzing, improvingKeys, onImproveCategory, onImproveAll }: {
   checklist: Record<string, CheckEntry>;
   setChecklist: (c: Record<string, CheckEntry>) => void;
   isAnalyzing: boolean;
+  improvingKeys: Set<SectionKey>;
+  onImproveCategory: (ci: number) => void;
+  onImproveAll: () => void;
 }) {
   const total = CHECKLIST_DATA.reduce((a, c) => a + c.items.length, 0);
   const done = Object.values(checklist).filter((e) => e.checked).length;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  // 전체적으로 보완이 필요한 자동 분석 미체크 항목이 있는지
+  const hasAnyUncheckedAuto = CHECKLIST_DATA.some((cat, ci) =>
+    cat.items.some((_, ii) => {
+      const e = checklist[`${ci}_${ii}`];
+      return e && !e.checked && e.auto;
+    })
+  );
+
+  // 섹션 보완 진행 중인지 (CATEGORY_TO_SECTIONS 기준)
+  const isAnyImproving = improvingKeys.size > 0;
 
   const toggle = (key: string) => {
     const cur = checklist[key];
@@ -694,6 +717,29 @@ function Checklist({ checklist, setChecklist, isAnalyzing }: {
           </div>
         </div>
 
+        {/* AI 전체 보완 배너 */}
+        {hasAnyUncheckedAuto && (
+          <div className="bg-blue-950 rounded-2xl p-4 mb-5 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-white text-sm font-semibold">✨ AI 자동 보완 가능</p>
+              <p className="text-blue-300 text-xs mt-0.5">미충족 항목을 분석해 각 섹션 내용을 자동으로 보강합니다.</p>
+            </div>
+            <button
+              onClick={onImproveAll}
+              disabled={isAnyImproving || isAnalyzing}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white whitespace-nowrap transition flex-shrink-0
+                ${isAnyImproving || isAnalyzing ? 'bg-blue-800 cursor-not-allowed opacity-60' : 'bg-blue-600 hover:bg-blue-500'}`}
+            >
+              {isAnyImproving ? (
+                <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>보완 중...</>
+              ) : '🔧 전체 자동 보완'}
+            </button>
+          </div>
+        )}
+
         {/* 범례 */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5 text-xs text-gray-600 space-y-1.5">
           <p className="font-semibold text-gray-700 mb-2">📌 체크리스트 안내</p>
@@ -707,7 +753,7 @@ function Checklist({ checklist, setChecklist, isAnalyzing }: {
           </div>
           <div className="flex items-center gap-2">
             <span className="w-4 h-4 rounded-md border-2 border-amber-400 flex-shrink-0" />
-            <span><strong className="text-amber-700">보완 필요</strong> — 해당 항목이 부족하거나 누락되었습니다. 이유를 참고해 내용을 보강하세요.</span>
+            <span><strong className="text-amber-700">보완 필요</strong> — 해당 항목이 부족하거나 누락되었습니다. AI 보완 버튼으로 자동 개선할 수 있습니다.</span>
           </div>
           <p className="text-gray-400 pt-1">항목을 직접 클릭해 수동으로 체크/해제할 수도 있습니다.</p>
         </div>
@@ -718,13 +764,43 @@ function Checklist({ checklist, setChecklist, isAnalyzing }: {
 
         {CHECKLIST_DATA.map((cat, ci) => {
           const catDone = cat.items.filter((_, ii) => checklist[`${ci}_${ii}`]?.checked).length;
+          // 이 카테고리에서 미충족 자동 항목이 있는지
+          const catUncheckedAuto = cat.items.some((_, ii) => {
+            const e = checklist[`${ci}_${ii}`];
+            return e && !e.checked && e.auto;
+          });
+          // 이 카테고리 관련 섹션이 보완 중인지
+          const catSections = CATEGORY_TO_SECTIONS[ci] ?? [];
+          const catImproving = catSections.some((k) => improvingKeys.has(k));
+
           return (
             <div key={ci} className="mb-5">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-bold text-gray-700">{cat.category}</span>
-                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">
-                  {catDone}/{cat.items.length}
-                </span>
+                <div className="flex items-center gap-2">
+                  {catUncheckedAuto && (
+                    <button
+                      onClick={() => onImproveCategory(ci)}
+                      disabled={catImproving || isAnyImproving || isAnalyzing}
+                      className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-semibold transition
+                        ${catImproving
+                          ? 'bg-blue-100 text-blue-500 cursor-not-allowed'
+                          : isAnyImproving || isAnalyzing
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'}`}
+                    >
+                      {catImproving ? (
+                        <><svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                        </svg>보완 중</>
+                      ) : <>🔧 AI 보완</>}
+                    </button>
+                  )}
+                  <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">
+                    {catDone}/{cat.items.length}
+                  </span>
+                </div>
               </div>
               <div className="space-y-2">
                 {cat.items.map((item, ii) => {
@@ -790,6 +866,7 @@ export default function Home() {
   const [uploadedText, setUploadedText] = useState('');
   const [checklist, setChecklist] = useState<Record<string, CheckEntry>>({});
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [improvingKeys, setImprovingKeys] = useState<Set<SectionKey>>(new Set());
 
   const updateSection = (key: SectionKey, val: string) =>
     setSections((prev) => ({ ...prev, [key]: val }));
@@ -818,6 +895,69 @@ export default function Home() {
     }
     setIsAnalyzing(false);
   }, [sections, formData]);
+
+  // ── AI 보완 생성 (체크리스트 미충족 항목 기반) ──────────────────────────────
+  const improveWithHints = useCallback(async (categoryIndex: number | 'all') => {
+    const categoriesToProcess: number[] =
+      categoryIndex === 'all'
+        ? Object.keys(CATEGORY_TO_SECTIONS).map(Number)
+        : [categoryIndex];
+
+    for (const ci of categoriesToProcess) {
+      const sectionKeys = CATEGORY_TO_SECTIONS[ci];
+      if (!sectionKeys) continue;
+
+      const cat = CHECKLIST_DATA[ci];
+      // 미충족(auto) 항목의 텍스트를 보완 힌트로 수집
+      const hints = cat.items
+        .map((item, ii) => {
+          const e = checklist[`${ci}_${ii}`];
+          return (e && !e.checked && e.auto) ? item : null;
+        })
+        .filter(Boolean) as string[];
+
+      if (hints.length === 0) continue;
+
+      for (const sectionKey of sectionKeys) {
+        setImprovingKeys((prev) => new Set(prev).add(sectionKey));
+        try {
+          const res = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              section: sectionKey,
+              formData,
+              uploadedText,
+              currentContent: sections[sectionKey],
+              improvementHints: hints,
+            }),
+          });
+          if (res.ok) {
+            const reader = res.body!.getReader();
+            const decoder = new TextDecoder();
+            let accumulated = '';
+            while (true) {
+              const { done, value: chunk } = await reader.read();
+              if (done) break;
+              accumulated += decoder.decode(chunk, { stream: true });
+              setSections((prev) => ({ ...prev, [sectionKey]: accumulated }));
+            }
+          }
+        } catch {
+          // 조용히 무시
+        }
+        setImprovingKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(sectionKey);
+          return next;
+        });
+      }
+    }
+
+    // 모든 섹션 보완 완료 후 체크리스트 재분석
+    await refreshChecklist();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checklist, sections, formData, uploadedText]);
 
   const filled: Record<string, boolean> = {
     info: !!(formData.agencyName && formData.projectName),
@@ -905,6 +1045,9 @@ export default function Home() {
               checklist={checklist}
               setChecklist={setChecklist}
               isAnalyzing={isAnalyzing}
+              improvingKeys={improvingKeys}
+              onImproveCategory={(ci) => improveWithHints(ci)}
+              onImproveAll={() => improveWithHints('all')}
             />
           )}
         </main>

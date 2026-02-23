@@ -113,7 +113,8 @@ function buildUserPrompt(
   section: SectionKey,
   formData: ProposalFormData,
   uploadedText: string,
-  currentContent: string
+  currentContent: string,
+  improvementHints?: string[]
 ): string {
   const sectionInstruction = SECTION_INSTRUCTIONS[section];
   const period =
@@ -139,9 +140,19 @@ ${sectionInstruction}
     prompt += `\n## 참고 자료 (업로드된 사업 소개 자료)\n${uploadedText.slice(0, 3000)}\n`;
   }
 
+  if (improvementHints && improvementHints.length > 0) {
+    prompt += `\n## ⚠️ 전문가 검토 결과 - 보완이 필요한 항목 (반드시 보강해 주세요)\n`;
+    improvementHints.forEach((h) => { prompt += `- ${h}\n`; });
+    prompt += '\n';
+  }
+
   if (currentContent && currentContent.trim()) {
-    prompt += `\n## 기존 작성 내용 (이를 바탕으로 개선해 주세요)\n${currentContent}\n`;
-    prompt += '\n위 내용을 더 구체적이고 설득력 있게 개선해 주세요.';
+    prompt += `\n## 기존 작성 내용\n${currentContent}\n`;
+    if (improvementHints && improvementHints.length > 0) {
+      prompt += '\n기존 내용의 전반적인 구조를 유지하면서, 위 보완 필요 항목들이 반드시 포함되도록 내용을 개선해 주세요. 보완 항목을 어디에서 다루었는지 명확히 드러나게 작성하세요.';
+    } else {
+      prompt += '\n위 내용을 더 구체적이고 설득력 있게 개선해 주세요.';
+    }
   } else {
     prompt += '\n위 정보를 바탕으로 해당 섹션을 작성해 주세요.';
   }
@@ -151,7 +162,7 @@ ${sectionInstruction}
 
 export async function POST(req: NextRequest) {
   try {
-    const { section, formData, uploadedText, currentContent } = await req.json();
+    const { section, formData, uploadedText, currentContent, improvementHints } = await req.json();
 
     if (!process.env.ANTHROPIC_API_KEY) {
       return new Response(
@@ -160,7 +171,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const userPrompt = buildUserPrompt(section, formData, uploadedText, currentContent);
+    const userPrompt = buildUserPrompt(section, formData, uploadedText, currentContent, improvementHints);
 
     const stream = client.messages.stream({
       model: MODEL,
