@@ -27,7 +27,10 @@ export async function POST(req: NextRequest) {
     let text = '';
 
     if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-      const pdfParse = (await import('pdf-parse')).default;
+      // pdf-parse의 index.js는 초기화 시 테스트 파일을 읽어 서버리스 환경에서 오류 발생.
+      // lib/pdf-parse.js를 직접 임포트해서 우회.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse/lib/pdf-parse.js');
       const data = await pdfParse(buffer);
       text = data.text;
     } else if (
@@ -50,9 +53,11 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
+    // 실제 에러 메시지를 응답에 포함해 원인 파악 용이하게
+    const message = error instanceof Error ? error.message : String(error);
     console.error('Extract API error:', error);
     return new Response(
-      JSON.stringify({ error: '파일 텍스트 추출 중 오류가 발생했습니다.' }),
+      JSON.stringify({ error: `파일 텍스트 추출 중 오류가 발생했습니다: ${message}` }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }

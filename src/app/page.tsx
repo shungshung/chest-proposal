@@ -244,14 +244,23 @@ function UploadSection({
 
     try {
       const res = await fetch('/api/extract', { method: 'POST', body: fd });
-      const data = await res.json();
+      // JSON 파싱 실패 대비 (서버가 HTML 500 에러를 반환하는 경우 등)
+      let data: { error?: string; text?: string };
+      try {
+        data = await res.json();
+      } catch {
+        const raw = await res.text().catch(() => '');
+        setError(`서버 오류 (${res.status}): ${raw.slice(0, 200) || '응답을 읽을 수 없습니다.'}`);
+        setIsExtracting(false);
+        return;
+      }
       if (data.error) {
         setError(data.error);
       } else {
-        setUploadedText(data.text);
+        setUploadedText(data.text ?? '');
       }
-    } catch {
-      setError('파일 처리 중 오류가 발생했습니다.');
+    } catch (err) {
+      setError(`네트워크 오류: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
     }
     setIsExtracting(false);
   }, [setUploadedText]);
