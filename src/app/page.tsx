@@ -903,6 +903,9 @@ export default function Home() {
         ? Object.keys(CATEGORY_TO_SECTIONS).map(Number)
         : [categoryIndex];
 
+    // 로컬에서 최신 섹션 내용 추적 (stale closure 방지)
+    const updatedSections: Sections = { ...sections };
+
     for (const ci of categoriesToProcess) {
       const sectionKeys = CATEGORY_TO_SECTIONS[ci];
       if (!sectionKeys) continue;
@@ -928,7 +931,7 @@ export default function Home() {
               section: sectionKey,
               formData,
               uploadedText,
-              currentContent: sections[sectionKey],
+              currentContent: updatedSections[sectionKey], // 최신 내용 사용
               improvementHints: hints,
             }),
           });
@@ -942,6 +945,7 @@ export default function Home() {
               accumulated += decoder.decode(chunk, { stream: true });
               setSections((prev) => ({ ...prev, [sectionKey]: accumulated }));
             }
+            updatedSections[sectionKey] = accumulated; // 로컬도 갱신
           }
         } catch {
           // 조용히 무시
@@ -954,9 +958,29 @@ export default function Home() {
       }
     }
 
-    // 모든 섹션 보완 완료 후 체크리스트 재분석
-    await refreshChecklist();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // ── 보완 완료 후 체크리스트 재분석 ──────────────────────────────────────
+    // refreshChecklist()는 stale closure 문제가 있으므로 직접 최신 섹션으로 호출
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch('/api/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections: updatedSections, formData, checklistData: CHECKLIST_DATA }),
+      });
+      const data = await res.json();
+      if (data.results && Array.isArray(data.results)) {
+        setChecklist((prev) => {
+          const next = { ...prev };
+          (data.results as Array<{ key: string; ok: boolean; why: string }>).forEach(({ key, ok, why }) => {
+            next[key] = { checked: ok, auto: true, reason: why };
+          });
+          return next;
+        });
+      }
+    } catch {
+      // 분석 실패 시 조용히 무시
+    }
+    setIsAnalyzing(false);
   }, [checklist, sections, formData, uploadedText]);
 
   const filled: Record<string, boolean> = {
