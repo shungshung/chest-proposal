@@ -6,6 +6,75 @@ import {
   SECTIONS, GUIDE_DATA, CHECKLIST_DATA, PROJECT_TYPES,
 } from '@/lib/data';
 
+// ─── Markdown Renderer ────────────────────────────────────────────────────────
+function renderInline(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
+function MarkdownView({ text, compact = false }: { text: string; compact?: boolean }) {
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let listItems: React.ReactNode[] = [];
+  let listKey = 0;
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={`ul-${listKey++}`} className={`${compact ? 'my-1' : 'my-2'} space-y-0.5`}>
+          {listItems}
+        </ul>
+      );
+      listItems = [];
+    }
+  };
+
+  lines.forEach((line, i) => {
+    if (line.startsWith('## ')) {
+      flushList();
+      elements.push(
+        <h2 key={i} className={`font-bold text-gray-900 border-b border-gray-200 pb-1 ${compact ? 'text-sm mt-4 mb-1.5' : 'text-base mt-5 mb-2'}`}>
+          {line.slice(3)}
+        </h2>
+      );
+    } else if (line.startsWith('### ')) {
+      flushList();
+      elements.push(
+        <h3 key={i} className={`font-semibold text-gray-800 ${compact ? 'text-xs mt-2.5 mb-1' : 'text-sm mt-3 mb-1.5'}`}>
+          {line.slice(4)}
+        </h3>
+      );
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      listItems.push(
+        <li key={i} className={`flex gap-1.5 ${compact ? 'text-xs' : 'text-sm'} text-gray-700 leading-relaxed`}>
+          <span className="text-gray-400 flex-shrink-0 mt-0.5">•</span>
+          <span>{renderInline(line.slice(2))}</span>
+        </li>
+      );
+    } else if (line.trim() === '') {
+      flushList();
+      if (elements.length > 0) {
+        elements.push(<div key={`sp-${i}`} className={compact ? 'h-1.5' : 'h-2'} />);
+      }
+    } else {
+      flushList();
+      elements.push(
+        <p key={i} className={`${compact ? 'text-xs' : 'text-sm'} text-gray-700 leading-relaxed`}>
+          {renderInline(line)}
+        </p>
+      );
+    }
+  });
+
+  flushList();
+  return <div className="space-y-0.5">{elements}</div>;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tab = 'info' | 'upload' | SectionKey | 'preview' | 'checklist';
 
@@ -322,6 +391,7 @@ function SectionWriter({ sectionKey, value, onChange, uploadedText, formData, on
 }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showRef, setShowRef] = useState(false);
+  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
   const guide = GUIDE_DATA[sectionKey];
   const section = SECTIONS.find((s) => s.key === sectionKey)!;
 
@@ -368,7 +438,24 @@ function SectionWriter({ sectionKey, value, onChange, uploadedText, formData, on
               <h2 className="text-sm font-bold text-gray-800">{section.icon} {section.label}</h2>
               <p className="text-xs text-gray-400 mt-0.5">{value.length > 0 ? `${value.length}자 작성됨` : '아직 작성되지 않았습니다'}</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              {/* 편집/미리보기 토글 */}
+              {value && (
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+                  <button
+                    onClick={() => setViewMode('edit')}
+                    className={`px-3 py-1.5 transition ${viewMode === 'edit' ? 'bg-gray-900 text-white font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    ✏️ 편집
+                  </button>
+                  <button
+                    onClick={() => setViewMode('preview')}
+                    className={`px-3 py-1.5 transition ${viewMode === 'preview' ? 'bg-gray-900 text-white font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    👁️ 미리보기
+                  </button>
+                </div>
+              )}
               {uploadedText && (
                 <button onClick={() => setShowRef(!showRef)}
                   className="text-xs px-3 py-2 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition">
@@ -398,15 +485,21 @@ function SectionWriter({ sectionKey, value, onChange, uploadedText, formData, on
             </div>
           )}
 
-          {/* 텍스트에리어 */}
+          {/* 텍스트에리어 / 미리보기 */}
           <div className="flex-1 flex flex-col overflow-hidden p-4">
-            <textarea
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder={`${section.label} 내용을 작성하세요.\n\n우측 가이드의 "예시 문구" 버튼으로 템플릿을 불러오거나, AI 자동 작성을 클릭하세요.`}
-              className="w-full flex-1 px-4 py-3 text-sm border border-gray-200 rounded-xl bg-gray-50 resize-none focus:outline-none focus:border-gray-300 focus:ring-2 focus:ring-gray-100 focus:bg-white transition leading-relaxed"
-              style={{ minHeight: 0 }}
-            />
+            {viewMode === 'edit' || !value ? (
+              <textarea
+                value={value}
+                onChange={(e) => { onChange(e.target.value); if (viewMode === 'preview' && !e.target.value) setViewMode('edit'); }}
+                placeholder={`${section.label} 내용을 작성하세요.\n\n우측 가이드의 "예시 문구" 버튼으로 템플릿을 불러오거나, AI 자동 작성을 클릭하세요.`}
+                className="w-full flex-1 px-4 py-3 text-sm border border-gray-200 rounded-xl bg-gray-50 resize-none focus:outline-none focus:border-gray-300 focus:ring-2 focus:ring-gray-100 focus:bg-white transition leading-relaxed font-mono"
+                style={{ minHeight: 0 }}
+              />
+            ) : (
+              <div className="flex-1 overflow-y-auto px-4 py-3 border border-gray-200 rounded-xl bg-white">
+                <MarkdownView text={value} />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -540,7 +633,9 @@ function Preview({ formData, sections }: { formData: ProposalFormData; sections:
               <div className="bg-gray-900 text-white font-bold text-sm px-4 py-2.5 rounded-lg mb-3">
                 {s.icon} {s.label}
               </div>
-              <p className="text-sm leading-loose text-gray-700 whitespace-pre-wrap pl-2">{sections[s.key]}</p>
+              <div className="pl-2">
+                <MarkdownView text={sections[s.key]} />
+              </div>
             </div>
           ) : null)}
         </div>
@@ -599,6 +694,24 @@ function Checklist({ checklist, setChecklist, isAnalyzing }: {
           </div>
         </div>
 
+        {/* 범례 */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5 text-xs text-gray-600 space-y-1.5">
+          <p className="font-semibold text-gray-700 mb-2">📌 체크리스트 안내</p>
+          <div className="flex items-center gap-2">
+            <span className="w-4 h-4 rounded-md bg-emerald-500 flex-shrink-0 inline-flex items-center justify-center">
+              <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            </span>
+            <span><strong className="text-emerald-700">충족</strong> — AI가 계획서 내용에서 해당 항목을 확인했습니다.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-4 h-4 rounded-md border-2 border-amber-400 flex-shrink-0" />
+            <span><strong className="text-amber-700">보완 필요</strong> — 해당 항목이 부족하거나 누락되었습니다. 이유를 참고해 내용을 보강하세요.</span>
+          </div>
+          <p className="text-gray-400 pt-1">항목을 직접 클릭해 수동으로 체크/해제할 수도 있습니다.</p>
+        </div>
+
         <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-sm text-amber-700 mb-5">
           ⚠️ 공동모금회 전문가 검토에서 자주 지적되는 항목입니다. 제출 전 반드시 점검하세요.
         </div>
@@ -625,10 +738,12 @@ function Checklist({ checklist, setChecklist, isAnalyzing }: {
                       className={`p-3.5 rounded-xl border cursor-pointer transition-all
                         ${isChecked
                           ? 'border-emerald-200 bg-emerald-50'
-                          : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'}`}>
+                          : isAuto
+                            ? 'border-amber-200 bg-amber-50 hover:border-amber-300'
+                            : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'}`}>
                       <div className="flex items-start gap-3">
                         <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all
-                          ${isChecked ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300'}`}>
+                          ${isChecked ? 'bg-emerald-500 border-emerald-500' : isAuto ? 'border-amber-400' : 'border-gray-300'}`}>
                           {isChecked && (
                             <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -641,14 +756,19 @@ function Checklist({ checklist, setChecklist, isAnalyzing }: {
                           </p>
                           {/* AI 분석 결과 */}
                           {reason && (
-                            <p className={`text-xs mt-1.5 leading-relaxed ${isChecked ? 'text-emerald-600' : 'text-amber-600'}`}>
-                              {isAuto ? '🤖 ' : ''}{reason}
+                            <p className={`text-xs mt-1.5 leading-relaxed ${isChecked ? 'text-emerald-600' : 'text-amber-700'}`}>
+                              🤖 {reason}
                             </p>
                           )}
                         </div>
-                        {isAuto && isChecked && (
-                          <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">AI</span>
-                        )}
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          {isAuto && isChecked && (
+                            <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-medium">AI ✓</span>
+                          )}
+                          {isAuto && !isChecked && (
+                            <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">보완 필요</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );

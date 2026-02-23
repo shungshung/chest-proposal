@@ -48,6 +48,73 @@ function sectionHeading(label: string) {
   });
 }
 
+// ── 인라인 마크다운 파싱 (**bold**) ──────────────────────────────────────────
+function parseInline(text: string, defaultSize = 22): TextRun[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return new TextRun({ text: part.slice(2, -2), bold: true, size: defaultSize, color: '1a1a1a' });
+    }
+    return new TextRun({ text: part, size: defaultSize, color: '1a1a1a' });
+  });
+}
+
+// ── 마크다운 → DOCX 단락 변환 ─────────────────────────────────────────────
+function parseMarkdownToDocx(content: string): Paragraph[] {
+  const lines = content.split('\n');
+  const paragraphs: Paragraph[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith('## ')) {
+      // 주요 소제목
+      paragraphs.push(
+        new Paragraph({
+          heading: HeadingLevel.HEADING_2,
+          children: [new TextRun({ text: line.slice(3), bold: true, size: 24, color: '003366' })],
+          spacing: { before: 220, after: 100 },
+          indent: { left: convertInchesToTwip(0.08) },
+        })
+      );
+    } else if (line.startsWith('### ')) {
+      // 세부 소제목
+      paragraphs.push(
+        new Paragraph({
+          heading: HeadingLevel.HEADING_3,
+          children: [new TextRun({ text: line.slice(4), bold: true, size: 22, color: '17375E' })],
+          spacing: { before: 160, after: 80 },
+          indent: { left: convertInchesToTwip(0.1) },
+        })
+      );
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      // 목록 항목
+      paragraphs.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: '• ', size: 22, color: '555555' }),
+            ...parseInline(line.slice(2)),
+          ],
+          spacing: { after: 60 },
+          indent: { left: convertInchesToTwip(0.25), hanging: convertInchesToTwip(0.12) },
+        })
+      );
+    } else if (line.trim() === '') {
+      // 빈 줄
+      paragraphs.push(new Paragraph({ children: [], spacing: { after: 80 } }));
+    } else {
+      // 일반 본문
+      paragraphs.push(
+        new Paragraph({
+          children: parseInline(line),
+          spacing: { after: 80 },
+          indent: { left: convertInchesToTwip(0.1) },
+        })
+      );
+    }
+  }
+
+  return paragraphs;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { formData, sections } = await req.json();
@@ -144,20 +211,12 @@ export async function POST(req: NextRequest) {
               children: [new TextRun({ text: formData.agencyName || '', bold: true, size: 26 })],
             }),
 
-            // 각 섹션
+            // 각 섹션 - 마크다운 파싱 적용
             ...sectionEntries.flatMap(([key, value]) => {
               const label = SECTION_LABELS[key] || key;
-              const lines = (value as string).split('\n');
               return [
                 sectionHeading(label),
-                ...lines.map(
-                  (line) =>
-                    new Paragraph({
-                      children: [new TextRun({ text: line, size: 22 })],
-                      spacing: { after: 80 },
-                      indent: { left: convertInchesToTwip(0.1) },
-                    })
-                ),
+                ...parseMarkdownToDocx(value as string),
               ];
             }),
           ],
