@@ -40,6 +40,41 @@ const DEFAULT_SECTIONS: Sections = {
   effects: '',
 };
 
+// ─── Form Field (모듈 최상위에 정의 - 한글 IME 버그 방지) ─────────────────────
+function FormField({
+  label,
+  field,
+  formData,
+  onChange,
+  placeholder,
+  required,
+  type = 'text',
+}: {
+  label: string;
+  field: keyof ProposalFormData;
+  formData: ProposalFormData;
+  onChange: (k: keyof ProposalFormData, v: string) => void;
+  placeholder: string;
+  required?: boolean;
+  type?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-bold text-primary-700">
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <input
+        type={type}
+        value={formData[field]}
+        onChange={(e) => onChange(field, e.target.value)}
+        placeholder={placeholder}
+        className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:bg-white transition"
+      />
+    </div>
+  );
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 function Sidebar({
   activeTab,
@@ -99,35 +134,9 @@ function BasicInfoForm({
   formData: ProposalFormData;
   setFormData: (d: ProposalFormData) => void;
 }) {
-  const upd = (k: keyof ProposalFormData, v: string) =>
-    setFormData({ ...formData, [k]: v });
-
-  const Field = ({
-    label,
-    field,
-    placeholder,
-    required,
-    type = 'text',
-  }: {
-    label: string;
-    field: keyof ProposalFormData;
-    placeholder: string;
-    required?: boolean;
-    type?: string;
-  }) => (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-bold text-primary-700">
-        {label}
-        {required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      <input
-        type={type}
-        value={formData[field]}
-        onChange={(e) => upd(field, e.target.value)}
-        placeholder={placeholder}
-        className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:bg-white transition"
-      />
-    </div>
+  const upd = useCallback(
+    (k: keyof ProposalFormData, v: string) => setFormData({ ...formData, [k]: v }),
+    [formData, setFormData]
   );
 
   return (
@@ -137,10 +146,10 @@ function BasicInfoForm({
           🏛 수행기관 정보
         </h2>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="기관명" field="agencyName" placeholder="(사)행복복지재단" required />
-          <Field label="담당자명" field="managerName" placeholder="홍길동" />
-          <Field label="연락처" field="phone" placeholder="02-000-0000" />
-          <Field label="이메일" field="email" placeholder="example@welfare.org" />
+          <FormField label="기관명" field="agencyName" formData={formData} onChange={upd} placeholder="(사)행복복지재단" required />
+          <FormField label="담당자명" field="managerName" formData={formData} onChange={upd} placeholder="홍길동" />
+          <FormField label="연락처" field="phone" formData={formData} onChange={upd} placeholder="02-000-0000" />
+          <FormField label="이메일" field="email" formData={formData} onChange={upd} placeholder="example@welfare.org" />
         </div>
       </div>
 
@@ -149,8 +158,14 @@ function BasicInfoForm({
           📝 사업 기본 정보
         </h2>
         <div className="space-y-4">
-          <Field label="사업명" field="projectName" required
-            placeholder="예: 중장년 자존감 회복 프로그램 '마음그림갤러리' 운영사업" />
+          <FormField
+            label="사업명"
+            field="projectName"
+            formData={formData}
+            onChange={upd}
+            required
+            placeholder="예: 중장년 자존감 회복 프로그램 '마음그림갤러리' 운영사업"
+          />
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
@@ -167,22 +182,27 @@ function BasicInfoForm({
                 ))}
               </select>
             </div>
-            <Field label="사업 지역" field="region" placeholder="예: 서울특별시 마포구" />
+            <FormField label="사업 지역" field="region" formData={formData} onChange={upd} placeholder="예: 서울특별시 마포구" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Field label="사업 시작일" field="startDate" placeholder="" type="date" />
-            <Field label="사업 종료일" field="endDate" placeholder="" type="date" />
+            <FormField label="사업 시작일" field="startDate" formData={formData} onChange={upd} placeholder="" type="date" />
+            <FormField label="사업 종료일" field="endDate" formData={formData} onChange={upd} placeholder="" type="date" />
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            <Field label="신청 금액 (원)" field="budgetTotal" placeholder="10,000,000" required />
-            <Field label="사업 대상" field="target" placeholder="50세 이상 중장년" />
-            <Field label="참여 인원" field="targetCount" placeholder="20명" />
+            <FormField label="신청 금액 (원)" field="budgetTotal" formData={formData} onChange={upd} placeholder="10,000,000" required />
+            <FormField label="사업 대상" field="target" formData={formData} onChange={upd} placeholder="50세 이상 중장년" />
+            <FormField label="참여 인원" field="targetCount" formData={formData} onChange={upd} placeholder="20명" />
           </div>
 
-          <Field label="핵심 성과 지표" field="keyOutcome"
-            placeholder="예: RSES 자존감 척도 평균 15% 이상 향상" />
+          <FormField
+            label="핵심 성과 지표"
+            field="keyOutcome"
+            formData={formData}
+            onChange={upd}
+            placeholder="예: RSES 자존감 척도 평균 15% 이상 향상"
+          />
         </div>
       </div>
 
@@ -211,10 +231,10 @@ function UploadSection({
     setFileName(file.name);
     setError('');
 
-    // 클라이언트 사전 검증: 10MB 초과 시 즉시 에러
-    const MAX_SIZE = 10 * 1024 * 1024;
+    // 클라이언트 사전 검증: 100MB 초과 시 즉시 에러
+    const MAX_SIZE = 100 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
-      setError(`파일이 너무 큽니다. 최대 10MB까지 가능합니다. (현재: ${(file.size / 1024 / 1024).toFixed(1)}MB)\n큰 파일은 텍스트를 복사해 아래 입력창에 직접 붙여넣어 주세요.`);
+      setError(`파일이 너무 큽니다. 최대 100MB까지 가능합니다. (현재: ${(file.size / 1024 / 1024).toFixed(1)}MB)\n큰 파일은 텍스트를 복사해 아래 입력창에 직접 붙여넣어 주세요.`);
       return;
     }
 
@@ -255,7 +275,7 @@ function UploadSection({
         >
           <div className="text-4xl mb-3">📄</div>
           <p className="text-sm text-gray-600 font-medium">파일을 클릭하거나 드래그하여 업로드</p>
-          <p className="text-xs text-gray-400 mt-1">지원 형식: PDF, DOCX, TXT · 최대 10MB</p>
+          <p className="text-xs text-gray-400 mt-1">지원 형식: PDF, DOCX, TXT · 최대 100MB</p>
           {fileName && <p className="text-sm text-blue-600 font-semibold mt-2">📎 {fileName}</p>}
         </div>
         <input
@@ -340,7 +360,7 @@ function SectionWriter({
         accumulated += decoder.decode(chunk, { stream: true });
         onChange(accumulated);
       }
-    } catch (e) {
+    } catch {
       onChange('네트워크 오류가 발생했습니다. 다시 시도해 주세요.');
     }
 
@@ -352,11 +372,12 @@ function SectionWriter({
   };
 
   return (
-    <div className="flex h-full">
-      {/* Editor */}
-      <div className="flex-1 p-6 flex flex-col gap-4">
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex-1 flex flex-col">
-          <div className="flex items-center justify-between mb-4">
+    <div className="flex h-full overflow-hidden">
+      {/* Editor - 화면 전체 높이 활용 */}
+      <div className="flex-1 p-5 flex flex-col overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
+          {/* 상단 툴바 */}
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 flex-shrink-0">
             <h2 className="text-base font-bold text-primary-900">
               {section.icon} {section.label}
             </h2>
@@ -392,25 +413,30 @@ function SectionWriter({
             </div>
           </div>
 
+          {/* 참고자료 패널 (접을 수 있음) */}
           {showRef && uploadedText && (
-            <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600 max-h-36 overflow-y-auto leading-relaxed whitespace-pre-wrap">
+            <div className="mx-5 mt-3 mb-0 p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600 max-h-36 overflow-y-auto leading-relaxed whitespace-pre-wrap flex-shrink-0">
               {uploadedText}
             </div>
           )}
 
-          <textarea
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={`${section.label} 내용을 작성하세요.\n\n우측 가이드의 "예시 문구 삽입" 버튼으로 템플릿을 불러오거나, AI 자동 작성 버튼을 클릭하세요.`}
-            className={`flex-1 min-h-80 px-4 py-3 text-sm border border-gray-200 rounded-lg bg-gray-50 resize-none focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:bg-white transition leading-relaxed
-              ${isGenerating ? 'cursor-blink' : ''}`}
-          />
-          <p className="text-right text-xs text-gray-400 mt-1.5">{value.length}자</p>
+          {/* 텍스트에리어 - flex-1로 남은 공간 전부 차지 */}
+          <div className="flex-1 flex flex-col overflow-hidden p-4">
+            <textarea
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder={`${section.label} 내용을 작성하세요.\n\n우측 가이드의 "예시 문구 삽입" 버튼으로 템플릿을 불러오거나, AI 자동 작성 버튼을 클릭하세요.`}
+              className={`w-full flex-1 px-4 py-3 text-sm border border-gray-200 rounded-lg bg-gray-50 resize-none focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:bg-white transition leading-relaxed
+                ${isGenerating ? 'cursor-blink' : ''}`}
+              style={{ minHeight: 0 }}
+            />
+            <p className="text-right text-xs text-gray-400 mt-1.5 flex-shrink-0">{value.length}자</p>
+          </div>
         </div>
       </div>
 
-      {/* Guide Panel */}
-      <aside className="w-72 min-w-[288px] bg-white border-l border-gray-100 overflow-y-auto p-5">
+      {/* 가이드 패널 */}
+      <aside className="w-72 min-w-[288px] bg-white border-l border-gray-100 overflow-y-auto p-5 flex-shrink-0">
         <h3 className="text-sm font-bold text-primary-900 mb-4 pb-2 border-b-2 border-blue-100">
           📖 작성 가이드
         </h3>
@@ -638,59 +664,72 @@ export default function Home() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} filled={filled} />
 
-        <main className="flex-1 overflow-y-auto bg-gray-50">
+        {/* main: overflow-hidden으로 변경 → 각 탭이 자체적으로 스크롤 관리 */}
+        <main className="flex-1 overflow-hidden bg-gray-50">
+
+          {/* 기본 정보 탭 */}
           {activeTab === 'info' && (
-            <div className="p-6 max-w-2xl">
-              <BasicInfoForm formData={formData} setFormData={setFormData} />
-              <div className="mt-5">
-                <button
-                  onClick={() => setActiveTab('upload')}
-                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
-                >
-                  다음: 자료 업로드 →
-                </button>
+            <div className="h-full overflow-y-auto">
+              <div className="p-6 max-w-2xl">
+                <BasicInfoForm formData={formData} setFormData={setFormData} />
+                <div className="mt-5">
+                  <button
+                    onClick={() => setActiveTab('upload')}
+                    className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
+                  >
+                    다음: 자료 업로드 →
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
+          {/* 자료 업로드 탭 */}
           {activeTab === 'upload' && (
-            <div className="p-6 max-w-2xl">
-              <UploadSection uploadedText={uploadedText} setUploadedText={setUploadedText} />
-              <div className="mt-5 flex gap-3">
-                <button
-                  onClick={() => setActiveTab('necessity')}
-                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
-                >
-                  다음: 섹션 작성 시작 →
-                </button>
-                <button
-                  onClick={() => setActiveTab('info')}
-                  className="px-5 py-2.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition"
-                >
-                  ← 이전
-                </button>
+            <div className="h-full overflow-y-auto">
+              <div className="p-6 max-w-2xl">
+                <UploadSection uploadedText={uploadedText} setUploadedText={setUploadedText} />
+                <div className="mt-5 flex gap-3">
+                  <button
+                    onClick={() => setActiveTab('necessity')}
+                    className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
+                  >
+                    다음: 섹션 작성 시작 →
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('info')}
+                    className="px-5 py-2.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition"
+                  >
+                    ← 이전
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
+          {/* 섹션 작성 탭: h-full로 전체 높이 활용 */}
           {currentSection && (
-            <div className="flex h-full">
-              <SectionWriter
-                sectionKey={activeTab as SectionKey}
-                value={sections[activeTab as SectionKey]}
-                onChange={(v) => updateSection(activeTab as SectionKey, v)}
-                uploadedText={uploadedText}
-                formData={formData}
-              />
+            <SectionWriter
+              sectionKey={activeTab as SectionKey}
+              value={sections[activeTab as SectionKey]}
+              onChange={(v) => updateSection(activeTab as SectionKey, v)}
+              uploadedText={uploadedText}
+              formData={formData}
+            />
+          )}
+
+          {/* 미리보기 탭 */}
+          {activeTab === 'preview' && (
+            <div className="h-full overflow-y-auto">
+              <Preview formData={formData} sections={sections} />
             </div>
           )}
 
-          {activeTab === 'preview' && (
-            <Preview formData={formData} sections={sections} />
-          )}
-
+          {/* 체크리스트 탭 */}
           {activeTab === 'checklist' && (
-            <Checklist checked={checklist} setChecked={setChecklist} />
+            <div className="h-full overflow-y-auto">
+              <Checklist checked={checklist} setChecked={setChecklist} />
+            </div>
           )}
         </main>
       </div>
