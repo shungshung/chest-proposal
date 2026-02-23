@@ -9,16 +9,29 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: {
-          50: '#E3F0FF',
-          100: '#C2DCFF',
-          500: '#1565C0',
-          700: '#17375E',
+        // 다크 사이드바용 (near-black)
+        sidebar: {
+          bg: '#0a0a0a',
+          hover: '#1a1a1a',
+          active: '#252525',
+          border: '#2a2a2a',
+          text: '#a0a0a0',
+          textActive: '#ffffff',
+        },
+        // 브랜드 강조색 (진한 남색 유지, 버튼/뱃지용)
+        brand: {
           900: '#003366',
+          700: '#17375E',
+          500: '#1565C0',
+          100: '#E3F0FF',
         },
       },
       fontFamily: {
         sans: ['Pretendard', 'Malgun Gothic', '맑은 고딕', 'sans-serif'],
+      },
+      borderRadius: {
+        '2xl': '1rem',
+        '3xl': '1.25rem',
       },
     },
   },
