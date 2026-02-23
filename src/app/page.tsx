@@ -231,37 +231,67 @@ function UploadSection({
     setFileName(file.name);
     setError('');
 
-    // 클라이언트 사전 검증: 100MB 초과 시 즉시 에러
+    // 파일 크기 제한: 100MB
     const MAX_SIZE = 100 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
-      setError(`파일이 너무 큽니다. 최대 100MB까지 가능합니다. (현재: ${(file.size / 1024 / 1024).toFixed(1)}MB)\n큰 파일은 텍스트를 복사해 아래 입력창에 직접 붙여넣어 주세요.`);
+      setError(`파일이 너무 큽니다. 최대 100MB까지 가능합니다. (현재: ${(file.size / 1024 / 1024).toFixed(1)}MB)`);
       return;
     }
 
     setIsExtracting(true);
-    const fd = new FormData();
-    fd.append('file', file);
 
     try {
-      const res = await fetch('/api/extract', { method: 'POST', body: fd });
-      // JSON 파싱 실패 대비 (서버가 HTML 500 에러를 반환하는 경우 등)
-      let data: { error?: string; text?: string };
-      try {
-        data = await res.json();
-      } catch {
-        const raw = await res.text().catch(() => '');
-        setError(`서버 오류 (${res.status}): ${raw.slice(0, 200) || '응답을 읽을 수 없습니다.'}`);
+      let text = '';
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const isDocx =
+        file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        file.name.toLowerCase().endsWith('.docx');
+      const isTxt = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
+
+      if (isPdf) {
+        // 브라우저에서 직접 PDF 텍스트 추출 (서버 전송 없음 → Vercel 크기 제한 우회)
+        const arrayBuffer = await file.arrayBuffer();
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const pages: string[] = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const pageText = content.items
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .map((item: any) => ('str' in item ? item.str : ''))
+            .join(' ');
+          pages.push(pageText);
+        }
+        text = pages.join('\n');
+
+      } else if (isDocx) {
+        // mammoth 브라우저 빌드로 클라이언트 추출
+        const arrayBuffer = await file.arrayBuffer();
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const mammoth = require('mammoth/mammoth.browser.min.js');
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        text = result.value;
+
+      } else if (isTxt) {
+        text = await file.text();
+
+      } else {
+        setError('지원하지 않는 파일 형식입니다. PDF, DOCX, TXT만 가능합니다.');
         setIsExtracting(false);
         return;
       }
-      if (data.error) {
-        setError(data.error);
+
+      if (!text.trim()) {
+        setError('텍스트를 추출하지 못했습니다. 스캔된 이미지 PDF이거나 보호된 파일일 수 있습니다. 내용을 직접 붙여넣어 주세요.');
       } else {
-        setUploadedText(data.text ?? '');
+        setUploadedText(text.trim());
       }
     } catch (err) {
-      setError(`네트워크 오류: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
+      setError(`파일 처리 중 오류: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
     }
+
     setIsExtracting(false);
   }, [setUploadedText]);
 
