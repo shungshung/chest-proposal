@@ -12,6 +12,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_SIZE) {
+      return new Response(
+        JSON.stringify({
+          error: `파일 크기가 너무 큽니다. 최대 10MB까지 업로드 가능합니다. (현재 파일: ${(file.size / 1024 / 1024).toFixed(1)}MB)`,
+        }),
+        { status: 413, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     let text = '';

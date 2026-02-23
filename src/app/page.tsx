@@ -210,8 +210,15 @@ function UploadSection({
   const handleFile = useCallback(async (file: File) => {
     setFileName(file.name);
     setError('');
-    setIsExtracting(true);
 
+    // 클라이언트 사전 검증: 10MB 초과 시 즉시 에러
+    const MAX_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setError(`파일이 너무 큽니다. 최대 10MB까지 가능합니다. (현재: ${(file.size / 1024 / 1024).toFixed(1)}MB)\n큰 파일은 텍스트를 복사해 아래 입력창에 직접 붙여넣어 주세요.`);
+      return;
+    }
+
+    setIsExtracting(true);
     const fd = new FormData();
     fd.append('file', file);
 
@@ -248,7 +255,7 @@ function UploadSection({
         >
           <div className="text-4xl mb-3">📄</div>
           <p className="text-sm text-gray-600 font-medium">파일을 클릭하거나 드래그하여 업로드</p>
-          <p className="text-xs text-gray-400 mt-1">지원 형식: PDF, DOCX, TXT</p>
+          <p className="text-xs text-gray-400 mt-1">지원 형식: PDF, DOCX, TXT · 최대 10MB</p>
           {fileName && <p className="text-sm text-blue-600 font-semibold mt-2">📎 {fileName}</p>}
         </div>
         <input
